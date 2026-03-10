@@ -4,7 +4,8 @@ import {
   getAllTimelines,
   getLeadTimeline,
   createTimeline,
-  deleteTimeline
+  deleteTimeline,
+  getTimelineGrouped
 } from "../controllers/timelineController.js";
 
 const router = express.Router();
@@ -12,6 +13,7 @@ const router = express.Router();
 /* GET ALL TIMELINE */
 
 router.get("/", getAllTimelines);
+router.get("/Grouped", getTimelineGrouped);
 
 /* GET LEAD TIMELINE */
 

@@ -91,7 +91,6 @@ export const getLeadById = async (req, res) => {
 
 }
 
-// import FollowUpHistory from "../models/FollowUpHistory.js";
 
 export const updateLead = async (req, res) => {
 
@@ -221,6 +220,9 @@ export const updateLead = async (req, res) => {
   }
 
 };
+
+
+
 
 export const deleteLead = async (req, res) => {
 

@@ -4,6 +4,87 @@ import Timeline from "../models/Timeline.js";
    GET ALL TIMELINES
 ----------------------------*/
 
+export const getTimelineGrouped = async (req, res) => {
+    try {
+
+        const timeline = await Timeline.aggregate([
+
+            {
+                $lookup: {
+                    from: "leads",
+                    localField: "leadId",
+                    foreignField: "_id",
+                    as: "lead"
+                }
+            },
+
+            { $unwind: "$lead" },
+
+            {
+                $lookup: {
+                    from: "users",
+                    localField: "createdBy",
+                    foreignField: "_id",
+                    as: "createdByUser"
+                }
+            },
+
+            {
+                $unwind: {
+                    path: "$createdByUser",
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+
+            {
+                $sort: { createdAt: 1 }
+            },
+
+            {
+                $group: {
+                    _id: "$leadId",
+
+                    lead: {
+                        $first: {
+                            _id: "$lead._id",
+                            name: "$lead.name",
+                            phone: "$lead.phone"
+                        }
+                    },
+
+                    timeline: {
+                        $push: {
+                            type: "$type",
+                            title: "$title",
+                            description: "$description",
+                            createdAt: "$createdAt",
+                            createdBy: "$createdByUser.name"
+                        }
+                    }
+                }
+            },
+
+            {
+                $sort: { "timeline.createdAt": 1 }
+            }
+
+        ]);
+
+        res.json({
+            success: true,
+            data: timeline
+        });
+
+    } catch (error) {
+
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+
+    }
+};
+
 export const getAllTimelines = async (req, res) => {
 
     try {
