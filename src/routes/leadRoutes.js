@@ -1,41 +1,28 @@
-// src/routes/leadRoutes.js
-import express from 'express';
-import { body } from 'express-validator';
+import express from "express"
+
 import {
-  getLeads,
-  getLeadById,
-  createLead,
-  updateLead,
-  deleteLead,
-  getLeadsStats,
-  getLeadsByExecutive
-} from '../controllers/leadController.js';
-import { auth } from '../middleware/auth.js';
-import { validate } from '../middleware/validate.js';
+ createLead,
+ getLeads,
+ getLeadById,
+ updateLead,
+ deleteLead,
+ changeLeadStatus
+} from "../controllers/leadController.js"
 
-const router = express.Router();
+import {auth} from "../middleware/auth.js"
 
-router.use(auth);
+const router = express.Router()
 
-router.get('/', getLeads);
-router.get('/stats', getLeadsStats);
-// router.get('/:id', getLeadsByExecutive);
-router.get('/executive/:executiveId', getLeadsByExecutive);
-router.get('/:id', getLeadById);
+router.post("/",auth,createLead)
 
-router.post('/',
-  [
-    body('name').notEmpty().withMessage('Name is required'),
-    body('phone').isMobilePhone().withMessage('Valid phone number required'),
-    body('email').optional().isEmail(),
-    body('source').notEmpty(),
-    body('assignedTo').notEmpty()
-  ],
-  validate,
-  createLead
-);
+router.get("/",auth,getLeads)
 
-router.put('/:id', updateLead);
-router.delete('/:id', deleteLead);
+router.get("/:id",auth,getLeadById)
 
-export default router;
+router.put("/:id",auth,updateLead)
+
+router.delete("/:id",auth,deleteLead)
+
+router.put("/:id/status",auth,changeLeadStatus)
+
+export default router

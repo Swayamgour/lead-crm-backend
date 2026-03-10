@@ -1,33 +1,15 @@
-// src/middleware/auth.js
-import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
-import Executive from '../models/Executive.js';
+import jwt from "jsonwebtoken"
 
-export const auth = async (req, res, next) => {
-  try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+export const auth = (req, res, next) => {
 
-    if (!token) {
-      throw new Error();
-    }
+  const token = req.headers.authorization?.split(" ")[1]
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  if (!token) return res.status(401).json({ message: "Unauthorized" })
 
-    let user;
-    if (decoded.role === 'executive') {
-      user = await Executive.findById(decoded.id).select('-password');
-    } else {
-      user = await User.findById(decoded.id).select('-password');
-    }
+  const decoded = jwt.verify(token, process.env.JWT_SECRET)
 
-    if (!user) {
-      throw new Error();
-    }
+  req.user = decoded
 
-    req.user = { ...user.toObject(), id: user._id, role: decoded.role };
-    req.token = token;
-    next();
-  } catch (error) {
-    res.status(401).json({ error: 'Please authenticate' });
-  }
-};
+  next()
+
+}

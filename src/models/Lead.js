@@ -31,7 +31,7 @@ const leadSchema = new mongoose.Schema({
   expectedValue: Number,
   assignedTo: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Executive',
+    ref: 'User',
     required: true
   },
   assignedBy: {
@@ -79,3 +79,31 @@ leadSchema.index({ createdAt: -1 });
 
 const Lead = mongoose.model('Lead', leadSchema);
 export default Lead;
+
+
+// import mongoose from "mongoose"
+
+// const schema = new mongoose.Schema({
+
+//  name:String,
+
+//  phone:String,
+
+//  email:String,
+
+//  source:String,
+
+//  status:{
+//   type:String,
+//   enum:["New","Contacted","Interested","Won","Lost"],
+//   default:"New"
+//  },
+
+//  assignedTo:{
+//   type:mongoose.Schema.Types.ObjectId,
+//   ref:"User"
+//  }
+
+// },{timestamps:true})
+
+// export default mongoose.model("Lead",schema)

@@ -1,179 +1,70 @@
-// src/controllers/authController.js
-import User from '../models/User.js';
-import Executive from '../models/Executive.js';
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
+import User from "../models/User.js"
+import jwt from "jsonwebtoken"
 
+export const register = async(req,res)=>{
 
+ try{
 
+  const user = await User.create(req.body)
 
-export const adminRegister = async (req, res) => {
+  res.json({
+   success:true,
+   user
+  })
 
-    try {
+ }catch(error){
 
-        const { name, email, password, phone } = req.body;
+  res.status(500).json({
+   success:false,
+   message:error.message
+  })
 
-        const existing = await User.findOne({ email, phone });
+ }
 
-        if (existing) {
-            return res.status(400).json({
-                message: "Admin already exists"
-            });
-        }
+}
 
-        // const hashedPassword = await bcrypt.hash(password, 10);
+export const login = async(req,res)=>{
 
-        const admin = await User.create({
-            name,
-            email,
-            password,
-            role: "admin",
-            phone
-        });
+ try{
 
-        res.status(201).json({
-            message: "Admin created successfully",
-            admin
-        });
+  const {email,password} = req.body
 
-    } catch (error) {
+  const user = await User.findOne({email})
 
-        res.status(500).json({
-            message: "Server error",
-            error
-        });
+  if(!user){
+   return res.status(401).json({message:"Invalid credentials"})
+  }
 
-    }
+  const match = await user.comparePassword(password)
 
-};
+  if(!match){
+   return res.status(401).json({message:"Invalid credentials"})
+  }
 
-export const login = async (req, res) => {
-    try {
+  const token = jwt.sign(
+   {id:user._id,role:user.role},
+   process.env.JWT_SECRET,
+   {expiresIn:"7d"}
+  )
 
-        const { email, password } = req.body;
+  res.json({
+   success:true,
+   token,
+   user
+  })
 
-        // 1️⃣ Check Admin/User
-        let user = await User.findOne({ email: email.toLowerCase() });
+ }catch(error){
 
-        if (user) {
+  res.status(500).json({message:error.message})
 
-            const isMatch = await user.comparePassword(password);
+ }
 
-            if (!isMatch) {
-                return res.status(401).json({ error: "Invalid credentials" });
-            }
+}
 
-            const token = jwt.sign(
-                { id: user._id, role: user.role },
-                process.env.JWT_SECRET,
-                { expiresIn: "7d" }
-            );
+export const getProfile = async(req,res)=>{
 
-            return res.json({
-                token,
-                user: {
-                    id: user._id,
-                    name: user.name,
-                    email: user.email,
-                    role: user.role
-                }
-            });
-        }
+ const user = await User.findById(req.user.id).select("-password")
 
-        // 2️⃣ Check Executive
-        const executive = await Executive.findOne({ email });
+ res.json(user)
 
-        if (executive) {
-
-            const isMatch = await bcrypt.compare(password, executive.password);
-
-            if (!isMatch) {
-                return res.status(401).json({ error: "Invalid credentials" });
-            }
-
-            const token = jwt.sign(
-                { id: executive._id, role: "executive" },
-                process.env.JWT_SECRET,
-                { expiresIn: "7d" }
-            );
-
-            executive.lastActive = new Date();
-            await executive.save();
-
-            return res.json({
-                token,
-                user: {
-                    id: executive._id,
-                    name: executive.name,
-                    email: executive.email,
-                    role: "executive",
-                    avatar: executive.avatar
-                }
-            });
-        }
-
-        return res.status(401).json({
-            error: "Invalid credentials"
-        });
-
-    } catch (error) {
-
-        res.status(500).json({
-            error: error.message
-        });
-
-    }
-};
-
-export const executiveLogin = async (req, res) => {
-    try {
-        const { email, password } = req.body;
-
-        const executive = await Executive.findOne({ email });
-        if (!executive) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        const isMatch = await bcrypt.compare(password, executive.password);
-        if (!isMatch) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        const token = jwt.sign(
-            { id: executive._id, role: 'executive' },
-            process.env.JWT_SECRET,
-            { expiresIn: '7d' }
-        );
-
-        // Update last active
-        executive.lastActive = new Date();
-        await executive.save();
-
-        res.json({
-            token,
-            user: {
-                id: executive._id,
-                name: executive.name,
-                email: executive.email,
-                role: 'executive',
-                avatar: executive.avatar
-            }
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
-
-export const getProfile = async (req, res) => {
-    try {
-        if (req.user.role === 'executive') {
-            const executive = await Executive.findById(req.user.id).select('-password');
-            return res.json(executive);
-        } else {
-            const user = await User.findById(req.user.id).select('-password');
-            return res.json(user);
-        }
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
+}

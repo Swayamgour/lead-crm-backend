@@ -5,12 +5,22 @@ import { TIMELINE_TYPES } from '../config/constants.js';
 const timelineSchema = new mongoose.Schema({
   leadId: {
     type: mongoose.Schema.Types.ObjectId,
+
     ref: 'Lead',
-    required: true
+    required: false
   },
   type: {
     type: String,
-    enum: ["lead", "task", "system", "followup"]
+    enum: [
+      "lead_updated",
+      "status_changed",
+      "note_added",
+      "followup_created",    // Add this
+      "followup_updated",     // Add this
+      "followup_completed",   // Optional
+      "followup_missed"       // Optional
+    ],
+    required: true
   },
   title: {
     type: String,
@@ -19,7 +29,7 @@ const timelineSchema = new mongoose.Schema({
   description: String,
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Executive'
+    ref: 'User'
   },
   createdByName: String,
   date: {
