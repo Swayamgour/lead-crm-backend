@@ -1,13 +1,27 @@
 import Timeline from "../models/Timeline.js";
+import mongoose from "mongoose";
 
 /* ---------------------------
    GET ALL TIMELINES
 ----------------------------*/
 
+
 export const getTimelineGrouped = async (req, res) => {
     try {
 
+        let matchStage = {};
+
+        if (req.user.role !== "admin") {
+            matchStage = {
+                assignedTo: new mongoose.Types.ObjectId(req.user.id)
+            };
+        }
+
         const timeline = await Timeline.aggregate([
+
+            {
+                $match: matchStage
+            },
 
             {
                 $lookup: {
@@ -37,7 +51,7 @@ export const getTimelineGrouped = async (req, res) => {
             },
 
             {
-                $sort: { createdAt: 1 }
+                $sort: { createdAt: -1 }
             },
 
             {
@@ -62,18 +76,11 @@ export const getTimelineGrouped = async (req, res) => {
                         }
                     }
                 }
-            },
-
-            {
-                $sort: { "timeline.createdAt": 1 }
             }
 
         ]);
 
-        res.json({
-            success: true,
-            data: timeline
-        });
+        res.json(timeline);
 
     } catch (error) {
 
@@ -84,6 +91,7 @@ export const getTimelineGrouped = async (req, res) => {
 
     }
 };
+
 
 export const getAllTimelines = async (req, res) => {
 
@@ -149,6 +157,7 @@ export const createTimeline = async (req, res) => {
 
         const timeline = await Timeline.create({
             leadId: req.body.leadId,
+
             type: req.body.type,
             title: req.body.title,
             description: req.body.description,

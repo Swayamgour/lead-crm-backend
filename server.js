@@ -31,10 +31,11 @@ app.use("/api/auth", authRoutes)
 app.use("/api/users", userRoutes)
 app.use("/api/leads", leadRoutes)
 app.use("/api/followups", followUpRoutes)
+app.use("/api/TimeLine", timelineRoutes)
+
 app.use("/api/customers", customerRoutes)
 app.use("/api/products", productRoutes)
 app.use("/api/quotations", quotationRoutes)
-app.use("/api/TimeLine", timelineRoutes)
 app.use("/api/dashboard", dashboardRoutes)
 
 app.listen(5000, () => {

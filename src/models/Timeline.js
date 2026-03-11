@@ -9,11 +9,17 @@ const timelineSchema = new mongoose.Schema({
     ref: 'Lead',
     required: false
   },
+  assignedTo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User"
+  },
   type: {
     type: String,
     enum: [
       "lead_updated",
+      "lead_created",
       "status_changed",
+      "lead_assigned",
       "note_added",
       "followup_created",    // Add this
       "followup_updated",     // Add this

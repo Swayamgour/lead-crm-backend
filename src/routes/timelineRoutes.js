@@ -7,13 +7,14 @@ import {
   deleteTimeline,
   getTimelineGrouped
 } from "../controllers/timelineController.js";
+import { auth } from "../middleware/auth.js";
 
 const router = express.Router();
 
 /* GET ALL TIMELINE */
 
 router.get("/", getAllTimelines);
-router.get("/Grouped", getTimelineGrouped);
+router.get("/Grouped", auth, getTimelineGrouped);
 
 /* GET LEAD TIMELINE */
 

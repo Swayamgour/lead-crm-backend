@@ -2,20 +2,51 @@ import FollowUp from "../models/FollowUp.js"
 
 export const createFollowUp = async (req, res) => {
 
-    const follow = await FollowUp.create(req.body)
+    const follow = await FollowUp.create({
+        ...req.body,
+        assignedTo: req.user.id
+    })
 
     res.json(follow)
 
 }
 
+
 export const getFollowUps = async (req, res) => {
 
-    const data = await FollowUp.find()
-        .populate("leadId", "name phone")
+    try {
 
-    res.json(data)
+        let filter = {};
 
-}
+        // if user is not admin → show only assigned followups
+
+        // console.log("User ID:", req.user.id);
+
+        // const datas = await FollowUp.find(filter);
+
+        // console.log("Followups:", datas);
+        
+        if (req.user.role !== "admin") {
+            filter.assignedTo = req.user.id;
+            console.log(req.user?.id)
+        }
+
+        const data = await FollowUp.find(filter)
+            .populate("leadId", "name phone")
+            .populate("assignedTo", "name email");
+
+        res.json(data);
+
+    } catch (error) {
+
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+
+    }
+
+};
 
 export const getTodayFollowUps = async (req, res) => {
 
