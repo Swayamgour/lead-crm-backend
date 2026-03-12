@@ -18,13 +18,7 @@ export const getFollowUps = async (req, res) => {
 
         let filter = {};
 
-        // if user is not admin → show only assigned followups
-
-        // console.log("User ID:", req.user.id);
-
-        // const datas = await FollowUp.find(filter);
-
-        // console.log("Followups:", datas);
+       
         
         if (req.user.role !== "admin") {
             filter.assignedTo = req.user.id;

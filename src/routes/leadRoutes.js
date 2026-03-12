@@ -7,7 +7,8 @@ import {
     updateLead,
     deleteLead,
     changeLeadStatus,
-    uploadLeadsExcel
+    uploadLeadsExcel,
+    // fetchIndiaMartLeads
 } from "../controllers/leadController.js"
 
 import { upload } from "../middleware/upload.js";
@@ -21,6 +22,8 @@ import { auth } from "../middleware/auth.js"
 const router = express.Router()
 
 router.post("/", auth, createLead)
+
+// router.get("/indiamart-sync", fetchIndiaMartLeads)
 
 
 

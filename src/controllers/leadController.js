@@ -1,10 +1,14 @@
 import Lead from "../models/Lead.js";
+import LeadHistory from "../models/LeadHistory.js";
 import FollowUp from "../models/FollowUp.js";
 import Timeline from "../models/Timeline.js";
 import FollowUpHistory from "../models/FollowUpHistory.js";
 import XLSX from "xlsx";
 import fs from "fs";
 import User from "../models/User.js";
+
+// import axios from "axios"
+// import Lead from "../models/Lead.js"
 
 
 // ================= CREATE LEAD =================
@@ -151,30 +155,134 @@ export const uploadLeadsExcel = async (req, res) => {
 // ================= GET LEADS =================
 
 export const getLeads = async (req, res) => {
-
   try {
-
     let filter = {};
 
+    // If user is not admin, only show leads assigned to them
     if (req.user.role !== "admin") {
       filter.assignedTo = req.user.id;
     }
 
+    // Add additional filters from query parameters
+    if (req.query.status) {
+      filter.status = req.query.status;
+    }
+
+    if (req.query.priority) {
+      filter.priority = req.query.priority;
+    }
+
+    if (req.query.source) {
+      filter.source = req.query.source;
+    }
+
+    if (req.query.pipelineStage) {
+      filter.pipelineStage = req.query.pipelineStage;
+    }
+
+    if (req.query.assignedTo) {
+      // Only admin can filter by assignedTo
+      if (req.user.role === "admin") {
+        filter.assignedTo = req.query.assignedTo;
+      }
+    }
+
+    if (req.query.search) {
+      filter.$or = [
+        { name: { $regex: req.query.search, $options: 'i' } },
+        { phone: { $regex: req.query.search, $options: 'i' } },
+        { email: { $regex: req.query.search, $options: 'i' } },
+        { companyName: { $regex: req.query.search, $options: 'i' } }
+      ];
+    }
+
+    if (req.query.followUpDate) {
+      if (req.query.followUpDate === 'today') {
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date();
+        endOfDay.setHours(23, 59, 59, 999);
+        filter.followUpDate = { $gte: startOfDay, $lte: endOfDay };
+      } else if (req.query.followUpDate === 'upcoming') {
+        filter.followUpDate = { $gte: new Date() };
+      } else if (req.query.followUpDate === 'overdue') {
+        filter.followUpDate = { $lt: new Date() };
+      }
+    }
+
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Sorting
+    let sort = {};
+    if (req.query.sortBy) {
+      const parts = req.query.sortBy.split(':');
+      sort[parts[0]] = parts[1] === 'desc' ? -1 : 1;
+    } else {
+      sort = { createdAt: -1 }; // Default sort by newest first
+    }
+
+    // Execute queries
     const leads = await Lead.find(filter)
-      .populate("assignedTo", "name email");
+      .populate("assignedTo", "name email")
+      .populate("createdBy", "name email")
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .lean(); // Use lean() for better performance
+
+    // Get total count for pagination
+    const totalLeads = await Lead.countDocuments(filter);
+
+    // Get statistics
+    const stats = {};
+    if (req.user.role === "admin" && req.query.includeStats === 'true') {
+      const pipeline = [
+        { $match: filter },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            byStatus: { $push: "$status" },
+            byPriority: { $push: "$priority" },
+            bySource: { $push: "$source" },
+            totalExpectedValue: { $sum: "$expectedValue" }
+          }
+        }
+      ];
+
+      const statsResult = await Lead.aggregate(pipeline);
+
+      if (statsResult.length > 0) {
+        const stat = statsResult[0];
+        stats.total = stat.total;
+        stats.totalExpectedValue = stat.totalExpectedValue || 0;
+        stats.byStatus = countOccurrences(stat.byStatus);
+        stats.byPriority = countOccurrences(stat.byPriority);
+        stats.bySource = countOccurrences(stat.bySource);
+      }
+    }
 
     res.json(leads);
 
   } catch (error) {
-
+    console.error('Error in getLeads:', error);
     res.status(500).json({
       success: false,
       message: error.message
     });
-
   }
-
 };
+
+// Helper function to count occurrences in array
+function countOccurrences(arr) {
+  return arr.reduce((acc, curr) => {
+    acc[curr] = (acc[curr] || 0) + 1;
+    return acc;
+  }, {});
+}
 
 
 
@@ -195,32 +303,115 @@ export const getLeadById = async (req, res) => {
 
 export const updateLead = async (req, res) => {
   try {
-
     const lead = await Lead.findById(req.params.id);
-
     if (!lead) {
       return res.status(404).json({ message: "Lead not found" });
     }
 
     const user = await User.findById(req.user.id);
-
     const oldAssignedTo = lead.assignedTo?.toString();
 
+    // Store old values for comparison
+    const oldValues = {
+      assignedTo: lead.assignedTo?.toString(),
+      followUpDate: lead.followUpDate,
+      status: lead.status,
+      priority: lead.priority,
+      pipelineStage: lead.pipelineStage,
+      remarks: lead.remarks,
+      name: lead.name,
+      phone: lead.phone,
+      email: lead.email,
+      source: lead.source,
+      product: lead.product,
+      expectedValue: lead.expectedValue,
+      city: lead.city,
+      state: lead.state,
+      companyName: lead.companyName,
+      tags: lead.tags ? [...lead.tags] : []
+    };
+
+    // Track which fields are being updated
+    const updatedFields = [];
+    const changes = {};
+
+    // Compare and track changes for each field
+    for (const [key, value] of Object.entries(req.body)) {
+      if (key !== 'assignedTo' && key !== 'followUpDate') { // Handle these separately
+        if (JSON.stringify(oldValues[key]) !== JSON.stringify(value)) {
+          updatedFields.push(key);
+          changes[key] = {
+            old: oldValues[key],
+            new: value
+          };
+        }
+      }
+    }
+
+    // Update the lead
     const updatedLead = await Lead.findByIdAndUpdate(
       req.params.id,
-      req.body,
-      { new: true }
+      {
+        ...req.body,
+        updatedAt: new Date()
+      },
+      { new: true, runValidators: true }
     );
 
+    console.log(updatedLead, "jkhgfd")
+
+    // ================= CREATE HISTORY FOR ALL UPDATES =================
+
+    // Create history for regular field updates (including remarks)
+    if (Object.keys(changes).length > 0) {
+      await LeadHistory.create({
+        leadId: updatedLead._id,
+        action: 'updated',
+        changedBy: req.user.id,
+        changedByName: user.name,
+        changes: changes,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
+      });
+
+      // Create timeline entry for the update
+      await Timeline.create({
+        leadId: updatedLead._id,
+        assignedTo: updatedLead.assignedTo,
+        type: "lead_updated",
+        title: "Lead Updated",
+        description: `${user.name} updated lead details: ${updatedFields.join(', ')}`,
+        createdBy: req.user._id,
+        createdByName: user.name,
+        metadata: { updatedFields, changes }
+      });
+    }
 
     // ================= ASSIGNED USER CHANGE =================
-
     if (req.body.assignedTo && oldAssignedTo !== req.body.assignedTo) {
-
       await FollowUp.updateMany(
         { leadId: updatedLead._id, status: "pending" },
         { assignedTo: req.body.assignedTo }
       );
+
+      // Create assignment history
+      await LeadHistory.create({
+        leadId: updatedLead._id,
+        action: 'assigned',
+        field: 'assignedTo',
+        oldValue: oldAssignedTo,
+        newValue: req.body.assignedTo,
+        changedBy: req.user.id,
+        changedByName: user.name,
+        changes: {
+          assignedTo: {
+            old: oldAssignedTo,
+            new: req.body.assignedTo
+          }
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
+      });
 
       await Timeline.create({
         leadId: updatedLead._id,
@@ -231,37 +422,29 @@ export const updateLead = async (req, res) => {
         createdBy: req.user._id,
         createdByName: user.name
       });
-
     }
 
-
-
     // ================= FOLLOWUP DATE CHANGE =================
-
-    if (req.body.followUpDate) {
+    if (req.body.followUpDate &&
+      new Date(req.body.followUpDate).getTime() !== new Date(oldValues.followUpDate).getTime()) {
 
       const followUp = await FollowUp.findOne({
         leadId: updatedLead._id
       }).sort({ createdAt: -1 });
 
-
-      // ===== UPDATE EXISTING FOLLOWUP =====
-
       if (followUp) {
-
         const oldDate = followUp.followUpDate;
-
         followUp.followUpDate = req.body.followUpDate;
-
         await followUp.save();
 
+        // Create followup history
         await FollowUpHistory.create({
           followUpId: followUp._id,
           leadId: updatedLead._id,
           action: "updated",
           oldDate,
           newDate: req.body.followUpDate,
-          changedBy: req.user._id,
+          changedBy: req.user.id,
           changes: {
             followUpDate: {
               old: oldDate,
@@ -270,23 +453,29 @@ export const updateLead = async (req, res) => {
           }
         });
 
+        // Create lead history for followup update
+        await LeadHistory.create({
+          leadId: updatedLead._id,
+          action: 'followup_updated',
+          field: 'followUpDate',
+          oldValue: oldDate,
+          newValue: req.body.followUpDate,
+          changedBy: req.user.id,
+          changedByName: user.name,
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent')
+        });
+
         await Timeline.create({
           leadId: updatedLead._id,
           assignedTo: updatedLead.assignedTo,
           type: "followup_updated",
           title: "Follow Up Updated",
-          description: `${user.name} changed follow up date`,
+          description: `${user.name} changed follow up date from ${new Date(oldDate).toLocaleDateString()} to ${new Date(req.body.followUpDate).toLocaleDateString()}`,
           createdBy: req.user._id,
           createdByName: user.name
         });
-
-      }
-
-
-      // ===== CREATE NEW FOLLOWUP =====
-
-      else {
-
+      } else {
         const newFollowUp = await FollowUp.create({
           leadId: updatedLead._id,
           assignedTo: updatedLead.assignedTo,
@@ -301,7 +490,7 @@ export const updateLead = async (req, res) => {
           leadId: updatedLead._id,
           action: "created",
           newDate: req.body.followUpDate,
-          changedBy: req.user._id,
+          changedBy: req.user.id,
           changes: {
             followUpDate: {
               new: req.body.followUpDate
@@ -309,55 +498,52 @@ export const updateLead = async (req, res) => {
           }
         });
 
+        await LeadHistory.create({
+          leadId: updatedLead._id,
+          action: 'followup_created',
+          field: 'followUpDate',
+          newValue: req.body.followUpDate,
+          changedBy: req.user.id,
+          changedByName: user.name,
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent')
+        });
+
         await Timeline.create({
           leadId: updatedLead._id,
           assignedTo: updatedLead.assignedTo,
           type: "followup_created",
           title: "Follow Up Created",
-          description: `${user.name} scheduled follow up`,
+          description: `${user.name} scheduled follow up for ${new Date(req.body.followUpDate).toLocaleDateString()}`,
           createdBy: req.user._id,
           createdByName: user.name
         });
-
       }
-
     }
 
-
-
-    // ================= NORMAL LEAD UPDATE =================
-
-    if (!req.body.followUpDate && !req.body.assignedTo) {
-
-      await Timeline.create({
-        leadId: updatedLead._id,
-        assignedTo: updatedLead.assignedTo,
-        type: "lead_updated",
-        title: "Lead Updated",
-        description: `${user.name} updated lead details`,
-        createdBy: req.user._id,
-        createdByName: user.name
-      });
-
+    // ===== SPECIAL HANDLING FOR REMARKS (if you want extra tracking) =====
+    if (req.body.remarks && req.body.remarks !== oldValues.remarks) {
+      // You can add additional logic here if needed
+      console.log(`Remarks updated for lead ${updatedLead._id} by ${user.name}`);
     }
 
-
+    
 
     res.json({
       success: true,
-      lead: updatedLead
+      lead: updatedLead,
+      updatedFields: Object.keys(changes),
+      message: Object.keys(changes).length > 0 ? 'Lead updated successfully' : 'No changes detected'
     });
 
   } catch (error) {
-
+    console.error('Error in updateLead:', error);
     res.status(500).json({
       success: false,
       message: error.message
     });
-
   }
 };
-
 
 // ================= DELETE LEAD =================
 
@@ -427,3 +613,7 @@ export const changeLeadStatus = async (req, res) => {
   res.json(lead);
 
 };
+
+
+
+

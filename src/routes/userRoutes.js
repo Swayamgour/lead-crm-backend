@@ -4,7 +4,8 @@ import {
     getUsers,
     createUser,
     updateUser,
-    deleteUser
+    deleteUser,
+    getUserById
 } from "../controllers/userController.js"
 
 import { auth } from "../middleware/auth.js"
@@ -24,6 +25,8 @@ router.post(
 )
 
 router.put("/:id", auth, permit("admin"), updateUser)
+
+router.get("/:id", auth, permit("admin"), getUserById)
 
 router.delete("/:id", auth, permit("admin"), deleteUser)
 
