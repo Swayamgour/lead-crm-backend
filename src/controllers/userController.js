@@ -1,16 +1,72 @@
 import User from "../models/User.js"
+import Lead from "../models/Lead.js";
+
 
 export const getUsers = async (req, res) => {
-
     try {
 
-        const users = await User
-            .find({ role: { $ne: "admin" } })   // admin exclude
-            .select("-password");
+        const users = await User.aggregate([
 
-        res.json(
-            users
-        );
+            {
+                $match: { role: { $ne: "admin" } }
+            },
+
+            {
+                $lookup: {
+                    from: "leads",
+                    localField: "_id",
+                    foreignField: "assignedTo",
+                    as: "leads"
+                }
+            },
+
+            {
+                $addFields: {
+
+                    totalLeads: { $size: "$leads" },
+
+                    wonLeads: {
+                        $size: {
+                            $filter: {
+                                input: "$leads",
+                                as: "lead",
+                                cond: { $eq: ["$$lead.status", "Won"] }
+                            }
+                        }
+                    }
+
+                }
+            },
+
+            {
+                $addFields: {
+
+                    accuracy: {
+                        $cond: [
+                            { $eq: ["$totalLeads", 0] },
+                            0,
+                            {
+                                $multiply: [
+                                    { $divide: ["$wonLeads", "$totalLeads"] },
+                                    100
+                                ]
+                            }
+                        ]
+                    }
+
+                }
+            },
+
+            {
+                $project: {
+                    password: 0,
+                    leads: 0
+                }
+            }
+
+        ]);
+
+        res.json(users);
 
     } catch (error) {
 
@@ -20,7 +76,6 @@ export const getUsers = async (req, res) => {
         });
 
     }
-
 };
 
 export const createUser = async (req, res) => {

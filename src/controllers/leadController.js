@@ -30,6 +30,21 @@ export const createLead = async (req, res) => {
       tags
     } = req.body;
 
+    const user = await User.findById(req.user.id);
+
+    const remarks = [];
+
+    // agar remark diya gaya hai
+    if (remark && remark.trim() !== "") {
+      remarks.push({
+        text: remark.trim(),
+        createdBy: req.user.id,
+        createdByName: user.name,
+        createdAt: new Date(),
+        isEdited: false
+      });
+    }
+
     const lead = await Lead.create({
       name,
       phone,
@@ -37,11 +52,11 @@ export const createLead = async (req, res) => {
       source,
       status,
       assignedTo,
-      remarks: remark,
+      remarks: remarks,
       followUpDate,
       expectedValue,
       tags,
-      createdBy: req.user._id
+      createdBy: req.user.id
     });
 
     // timeline
@@ -51,21 +66,35 @@ export const createLead = async (req, res) => {
       type: "lead_created",
       title: "Lead Created",
       description: `${lead.name} lead created`,
-      createdBy: req.user._id
+      createdBy: req.user.id
     });
+
+    // agar remark hai to timeline bhi
+    if (remarks.length > 0) {
+      await Timeline.create({
+        leadId: lead._id,
+        assignedTo: lead.assignedTo,
+        type: "remark_added",
+        title: "Remark Added",
+        description: `${user.name} added remark while creating lead`,
+        createdBy: req.user.id,
+        createdByName: user.name,
+        metadata: {
+          text: remarks[0].text
+        }
+      });
+    }
 
     // followup
     if (followUpDate) {
-
       await FollowUp.create({
         leadId: lead._id,
         assignedTo: lead.assignedTo,
         followUpDate,
         type: "call",
         status: "pending",
-        createdBy: req.user._id
+        createdBy: req.user.id
       });
-
     }
 
     res.json({
@@ -730,7 +759,7 @@ export const addRemark = async (req, res) => {
 
     await lead.save();
 
-     const addedRemark = lead.remarks[lead.remarks.length - 1];
+    const addedRemark = lead.remarks[lead.remarks.length - 1];
 
     await Timeline.create({
       leadId: lead._id,
@@ -746,7 +775,7 @@ export const addRemark = async (req, res) => {
       }
     });
 
-   
+
 
     console.log("Added remark successfully:", addedRemark);
     console.log("Added remark successfully:", addedRemark);
