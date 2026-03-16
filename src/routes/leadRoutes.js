@@ -8,6 +8,10 @@ import {
     deleteLead,
     changeLeadStatus,
     uploadLeadsExcel,
+    addRemark,
+    editRemark,
+    deleteRemark,
+    getLeadRemarks,
     // fetchIndiaMartLeads
 } from "../controllers/leadController.js"
 
@@ -38,5 +42,13 @@ router.put("/:id", auth, updateLead)
 router.delete("/:id", auth, deleteLead)
 
 router.put("/:id/status", auth, changeLeadStatus)
+
+// In your routes file (e.g., leadRoutes.js)
+
+// Remark management routes
+router.post('/:id/remarks', auth, addRemark);
+router.put('/:id/remarks/:remarkId', auth, editRemark);
+router.delete('/:id/remarks/:remarkId', auth, deleteRemark);
+router.get('/:id/remarks', auth, getLeadRemarks);
 
 export default router

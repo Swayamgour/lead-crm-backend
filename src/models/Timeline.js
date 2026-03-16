@@ -24,7 +24,11 @@ const timelineSchema = new mongoose.Schema({
       "followup_created",    // Add this
       "followup_updated",     // Add this
       "followup_completed",   // Optional
-      "followup_missed"       // Optional
+      "followup_missed",    // Optional
+      "remark_added",
+      "remark_edited",   // ✅ yaha add karo
+      "remark_deleted",
+      "followup_added"
     ],
     required: true
   },

@@ -1,19 +1,43 @@
-const schema = new mongoose.Schema({
+// src/models/RemarkHistory.js
+import mongoose from 'mongoose';
 
+const remarkHistorySchema = new mongoose.Schema({
     leadId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Lead"
+        ref: 'Lead',
+        required: true,
+        index: true
     },
-
-    oldRemark: String,
-
-    newRemark: String,
-
+    remarkId: {
+        type: mongoose.Schema.Types.ObjectId, // Reference to the remark in Lead model
+        required: true
+    },
+    action: {
+        type: String,
+        enum: ['created', 'updated', 'deleted'],
+        required: true
+    },
+    oldText: String,
+    newText: String,
     changedBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User"
+        ref: 'User',
+        required: true
+    },
+    changedByName: String,
+    ipAddress: String,
+    userAgent: String,
+    createdAt: {
+        type: Date,
+        default: Date.now
     }
+}, {
+    timestamps: true
+});
 
-}, { timestamps: true })
+// Indexes
+remarkHistorySchema.index({ leadId: 1, createdAt: -1 });
+remarkHistorySchema.index({ remarkId: 1, createdAt: -1 });
 
-export default mongoose.model("RemarkHistory", schema)
+const RemarkHistory = mongoose.model('RemarkHistory', remarkHistorySchema);
+export default RemarkHistory;

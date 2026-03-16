@@ -1,6 +1,7 @@
 // src/models/LeadHistory.js
 import mongoose from 'mongoose';
 
+// src/models/LeadHistory.js (update the enum)
 const leadHistorySchema = new mongoose.Schema({
     leadId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -10,10 +11,10 @@ const leadHistorySchema = new mongoose.Schema({
     },
     action: {
         type: String,
-        enum: ['created', 'updated', 'assigned', 'status_changed', 'followup_updated', 'remarks_updated'],
+        enum: ['created', 'updated', 'assigned', 'status_changed', 'followup_updated', 'remarks_updated', 'remark_added', 'remark_edited', 'remark_deleted'],
         required: true
     },
-    field: String, // Which field was changed
+    field: String,
     oldValue: mongoose.Schema.Types.Mixed,
     newValue: mongoose.Schema.Types.Mixed,
     changedBy: {
@@ -35,6 +36,8 @@ const leadHistorySchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+// ... rest remains the same
 
 // Compound index for efficient querying
 leadHistorySchema.index({ leadId: 1, createdAt: -1 });

@@ -1,6 +1,7 @@
 import Lead from "../models/Lead.js";
 import LeadHistory from "../models/LeadHistory.js";
 import FollowUp from "../models/FollowUp.js";
+import RemarkHistory from "../models/RemarkHistory.js";
 import Timeline from "../models/Timeline.js";
 import FollowUpHistory from "../models/FollowUpHistory.js";
 import XLSX from "xlsx";
@@ -156,6 +157,7 @@ export const uploadLeadsExcel = async (req, res) => {
 
 export const getLeads = async (req, res) => {
   try {
+
     let filter = {};
 
     // If user is not admin, only show leads assigned to them
@@ -163,49 +165,46 @@ export const getLeads = async (req, res) => {
       filter.assignedTo = req.user.id;
     }
 
-    // Add additional filters from query parameters
-    if (req.query.status) {
-      filter.status = req.query.status;
+    // Filters
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.priority) filter.priority = req.query.priority;
+    if (req.query.source) filter.source = req.query.source;
+    if (req.query.pipelineStage) filter.pipelineStage = req.query.pipelineStage;
+
+    if (req.query.assignedTo && req.user.role === "admin") {
+      filter.assignedTo = req.query.assignedTo;
     }
 
-    if (req.query.priority) {
-      filter.priority = req.query.priority;
-    }
-
-    if (req.query.source) {
-      filter.source = req.query.source;
-    }
-
-    if (req.query.pipelineStage) {
-      filter.pipelineStage = req.query.pipelineStage;
-    }
-
-    if (req.query.assignedTo) {
-      // Only admin can filter by assignedTo
-      if (req.user.role === "admin") {
-        filter.assignedTo = req.query.assignedTo;
-      }
-    }
-
+    // Search
     if (req.query.search) {
       filter.$or = [
-        { name: { $regex: req.query.search, $options: 'i' } },
-        { phone: { $regex: req.query.search, $options: 'i' } },
-        { email: { $regex: req.query.search, $options: 'i' } },
-        { companyName: { $regex: req.query.search, $options: 'i' } }
+        { name: { $regex: req.query.search, $options: "i" } },
+        { phone: { $regex: req.query.search, $options: "i" } },
+        { email: { $regex: req.query.search, $options: "i" } },
+        { companyName: { $regex: req.query.search, $options: "i" } },
+        { "remarks.text": { $regex: req.query.search, $options: "i" } }
       ];
     }
 
+    // Followup filter
     if (req.query.followUpDate) {
-      if (req.query.followUpDate === 'today') {
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date();
-        endOfDay.setHours(23, 59, 59, 999);
-        filter.followUpDate = { $gte: startOfDay, $lte: endOfDay };
-      } else if (req.query.followUpDate === 'upcoming') {
+
+      if (req.query.followUpDate === "today") {
+
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+
+        const end = new Date();
+        end.setHours(23, 59, 59, 999);
+
+        filter.followUpDate = { $gte: start, $lte: end };
+
+      } else if (req.query.followUpDate === "upcoming") {
+
         filter.followUpDate = { $gte: new Date() };
-      } else if (req.query.followUpDate === 'overdue') {
+
+      } else if (req.query.followUpDate === "overdue") {
+
         filter.followUpDate = { $lt: new Date() };
       }
     }
@@ -216,65 +215,103 @@ export const getLeads = async (req, res) => {
     const skip = (page - 1) * limit;
 
     // Sorting
-    let sort = {};
+    let sort = { createdAt: -1 };
+
     if (req.query.sortBy) {
-      const parts = req.query.sortBy.split(':');
-      sort[parts[0]] = parts[1] === 'desc' ? -1 : 1;
-    } else {
-      sort = { createdAt: -1 }; // Default sort by newest first
+      const parts = req.query.sortBy.split(":");
+      sort = { [parts[0]]: parts[1] === "desc" ? -1 : 1 };
     }
 
-    // Execute queries
+    // Fetch leads with populated fields
     const leads = await Lead.find(filter)
       .populate("assignedTo", "name email")
       .populate("createdBy", "name email")
+      .populate({
+        path: "remarks.createdBy",
+        select: "name email"
+      })
       .sort(sort)
       .skip(skip)
       .limit(limit)
-      .lean(); // Use lean() for better performance
+      .lean();
 
-    // Get total count for pagination
+    // Get lead IDs
+    const leadIds = leads.map(l => l._id);
+
+    // Get history for remarks only
+    const remarksHistories = await LeadHistory.find({
+      leadId: { $in: leadIds },
+      action: { $in: ["remark_added", "remark_edited", "remark_deleted"] }
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Get pending follow-ups
+    const followUps = await FollowUp.find({
+      leadId: { $in: leadIds },
+      status: "pending"
+    })
+      .lean();
+
+    // Process leads
+    const leadsWithDetails = leads.map(lead => {
+
+      // Sort remarks (newest first)
+      const sortedRemarks = lead.remarks ?
+        [...lead.remarks].sort((a, b) =>
+          new Date(b.createdAt) - new Date(a.createdAt)
+        ) : [];
+
+      // Get remarks history for this lead
+      const leadRemarksHistory = remarksHistories.filter(
+        h => h.leadId.toString() === lead._id.toString()
+      );
+
+      // Get follow-ups for this lead
+      const leadFollowUps = followUps.filter(
+        f => f.leadId.toString() === lead._id.toString()
+      );
+
+      return {
+        ...lead,
+        remarks: sortedRemarks,
+        remarksCount: sortedRemarks.length,
+        remarksHistory: leadRemarksHistory,
+        pendingFollowUps: leadFollowUps,
+        pendingFollowUpsCount: leadFollowUps.length,
+        lastRemark: sortedRemarks.length > 0 ? sortedRemarks[0] : null
+      };
+    });
+
+    // Total count
     const totalLeads = await Lead.countDocuments(filter);
 
-    // Get statistics
-    const stats = {};
-    if (req.user.role === "admin" && req.query.includeStats === 'true') {
-      const pipeline = [
-        { $match: filter },
-        {
-          $group: {
-            _id: null,
-            total: { $sum: 1 },
-            byStatus: { $push: "$status" },
-            byPriority: { $push: "$priority" },
-            bySource: { $push: "$source" },
-            totalExpectedValue: { $sum: "$expectedValue" }
-          }
-        }
-      ];
+    res.json(leadsWithDetails);
 
-      const statsResult = await Lead.aggregate(pipeline);
-
-      if (statsResult.length > 0) {
-        const stat = statsResult[0];
-        stats.total = stat.total;
-        stats.totalExpectedValue = stat.totalExpectedValue || 0;
-        stats.byStatus = countOccurrences(stat.byStatus);
-        stats.byPriority = countOccurrences(stat.byPriority);
-        stats.bySource = countOccurrences(stat.bySource);
-      }
-    }
-
-    res.json(leads);
+    // {
+    //   success: true,
+    //   leads: ,
+    //   pagination: {
+    //     total: totalLeads,
+    //     page,
+    //     limit,
+    //     pages: Math.ceil(totalLeads / limit)
+    //   }
+    // }
 
   } catch (error) {
-    console.error('Error in getLeads:', error);
+
+    console.error("Error in getLeads:", error);
+
     res.status(500).json({
       success: false,
       message: error.message
     });
+
   }
 };
+
+
 
 // Helper function to count occurrences in array
 function countOccurrences(arr) {
@@ -337,7 +374,7 @@ export const updateLead = async (req, res) => {
 
     // Compare and track changes for each field
     for (const [key, value] of Object.entries(req.body)) {
-      if (key !== 'assignedTo' && key !== 'followUpDate') { // Handle these separately
+      if (key !== 'assignedTo' && key !== 'followUpDate' && key !== 'remarks') {
         if (JSON.stringify(oldValues[key]) !== JSON.stringify(value)) {
           updatedFields.push(key);
           changes[key] = {
@@ -522,12 +559,13 @@ export const updateLead = async (req, res) => {
     }
 
     // ===== SPECIAL HANDLING FOR REMARKS (if you want extra tracking) =====
-    if (req.body.remarks && req.body.remarks !== oldValues.remarks) {
-      // You can add additional logic here if needed
-      console.log(`Remarks updated for lead ${updatedLead._id} by ${user.name}`);
-    }
 
-    
+
+    // ================= REMARKS HISTORY =================
+
+
+
+
 
     res.json({
       success: true,
@@ -617,3 +655,359 @@ export const changeLeadStatus = async (req, res) => {
 
 
 
+
+
+// ================= REMARK MANAGEMENT =================
+
+// Add a new remark
+// In your backend leadController.js
+
+export const addRemark = async (req, res) => {
+  try {
+    console.log("=== ADD REMARK DEBUG ===");
+    console.log("Request params:", req.params);
+    console.log("Request body:", req.body);
+    console.log("Request user:", req.user?.id);
+
+    const { id } = req.params;
+    const { text } = req.body;
+
+    if (!text || text.trim() === '') {
+      console.log("Error: No text provided");
+      return res.status(400).json({
+        success: false,
+        message: "Remark text is required"
+      });
+    }
+
+    console.log("Looking for lead with ID:", id);
+    const lead = await Lead.findById(id);
+    if (!lead) {
+      console.log("Error: Lead not found");
+      return res.status(404).json({
+        success: false,
+        message: "Lead not found"
+      });
+    }
+
+    console.log("Looking for user with ID:", req.user.id);
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      console.log("Error: User not found");
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    const userId = req.user?.id || req.user?._id;
+
+    console.log("User ID:", userId);
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated"
+      });
+    }
+
+    // Create new remark object with createdBy from authenticated user
+    const newRemark = {
+      text: text.trim(),
+      createdBy: userId,
+      createdByName: user.name,
+      createdAt: new Date(),
+      isEdited: false
+    };
+
+    console.log("New remark object:", newRemark);
+
+
+    // Add remark to lead
+    lead.remarks.push(newRemark);
+
+    lead.updatedAt = new Date();
+
+    await lead.save();
+
+     const addedRemark = lead.remarks[lead.remarks.length - 1];
+
+    await Timeline.create({
+      leadId: lead._id,
+      assignedTo: lead.assignedTo,
+      type: "remark_added",
+      title: "Remark Added",
+      description: `${user.name} added a remark`,
+      createdBy: req.user.id,
+      createdByName: user.name,
+      metadata: {
+        remarkId: addedRemark._id,
+        text: addedRemark.text
+      }
+    });
+
+   
+
+    console.log("Added remark successfully:", addedRemark);
+    console.log("Added remark successfully:", addedRemark);
+
+    res.json({
+      success: true,
+      message: "Remark added successfully",
+      remark: addedRemark
+    });
+
+  } catch (error) {
+    console.error('Error in addRemark:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// Edit an existing remark
+export const editRemark = async (req, res) => {
+  try {
+    const { id, remarkId } = req.params;
+    const { text } = req.body;
+
+    if (!text || text.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: "Remark text is required"
+      });
+    }
+
+    const lead = await Lead.findById(id);
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: "Lead not found"
+      });
+    }
+
+    // Find the remark
+    const remark = lead.remarks.id(remarkId);
+    if (!remark) {
+      return res.status(404).json({
+        success: false,
+        message: "Remark not found"
+      });
+    }
+
+    const user = await User.findById(req.user.id);
+    const oldText = remark.text;
+
+    // Update the remark
+    remark.text = text.trim();
+    remark.updatedAt = new Date();
+    remark.isEdited = true;
+    lead.updatedAt = new Date();
+
+    await lead.save();
+
+    // Create history entry in LeadHistory
+    await LeadHistory.create({
+      leadId: lead._id,
+      action: "remark_edited",
+      field: "remarks",
+      oldValue: oldText,
+      newValue: text.trim(),
+      changedBy: req.user.id,
+      changedByName: user.name,
+      changes: {
+        remark: {
+          remarkId: remark._id,
+          oldText,
+          newText: text.trim()
+        }
+      },
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent")
+    });
+
+    // Create timeline entry
+    await Timeline.create({
+      leadId: lead._id,
+      assignedTo: lead.assignedTo,
+      type: "remark_edited",
+      title: "Remark Edited",
+      description: `${user.name} edited a remark`,
+      createdBy: req.user.id,
+      createdByName: user.name,
+      metadata: {
+        remarkId: remark._id,
+        oldText,
+        newText: text.trim()
+      }
+    });
+
+    // Create detailed remark history
+    if (RemarkHistory) {
+      await RemarkHistory.create({
+        leadId: lead._id,
+        remarkId: remark._id,
+        action: 'updated',
+        oldText,
+        newText: text.trim(),
+        changedBy: req.user.id,
+        changedByName: user.name,
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Remark updated successfully",
+      remark,
+      allRemarks: lead.remarks
+    });
+
+  } catch (error) {
+    console.error('Error in editRemark:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// Delete a remark
+export const deleteRemark = async (req, res) => {
+  try {
+    const { id, remarkId } = req.params;
+
+    const lead = await Lead.findById(id);
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: "Lead not found"
+      });
+    }
+
+    // Find the remark
+    const remark = lead.remarks.id(remarkId);
+    if (!remark) {
+      return res.status(404).json({
+        success: false,
+        message: "Remark not found"
+      });
+    }
+
+    const user = await User.findById(req.user.id);
+    const deletedText = remark.text;
+
+    // Remove the remark
+    remark.remove();
+    lead.updatedAt = new Date();
+    await lead.save();
+
+    // Create history entry in LeadHistory
+    await LeadHistory.create({
+      leadId: lead._id,
+      action: "remark_deleted",
+      field: "remarks",
+      oldValue: deletedText,
+      changedBy: req.user.id,
+      changedByName: user.name,
+      changes: {
+        remark: {
+          remarkId,
+          deletedText
+        }
+      },
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent")
+    });
+
+    // Create timeline entry
+    await Timeline.create({
+      leadId: lead._id,
+      assignedTo: lead.assignedTo,
+      type: "remark_deleted",
+      title: "Remark Deleted",
+      description: `${user.name} deleted a remark`,
+      createdBy: req.user._id,
+      createdByName: user.name,
+      metadata: {
+        remarkId,
+        deletedText
+      }
+    });
+
+    // Create detailed remark history
+    if (RemarkHistory) {
+      await RemarkHistory.create({
+        leadId: lead._id,
+        remarkId,
+        action: 'deleted',
+        oldText: deletedText,
+        changedBy: req.user.id,
+        changedByName: user.name,
+        ipAddress: req.ip,
+        userAgent: req.get("user-agent")
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Remark deleted successfully",
+      allRemarks: lead.remarks
+    });
+
+  } catch (error) {
+    console.error('Error in deleteRemark:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// Get all remarks for a lead with history
+export const getLeadRemarks = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const lead = await Lead.findById(id)
+      .populate('remarks.createdBy', 'name email')
+      .select('remarks');
+
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: "Lead not found"
+      });
+    }
+
+    // Get remark history if you're using RemarkHistory model
+    let remarkHistory = [];
+    if (RemarkHistory) {
+      remarkHistory = await RemarkHistory.find({ leadId: id })
+        .populate('changedBy', 'name email')
+        .sort({ createdAt: -1 })
+        .lean();
+    }
+
+    // Sort remarks by createdAt descending (newest first)
+    const sortedRemarks = lead.remarks.sort((a, b) =>
+      new Date(b.createdAt) - new Date(a.createdAt)
+    );
+
+    res.json({
+      success: true,
+      remarks: sortedRemarks,
+      history: remarkHistory,
+      totalRemarks: sortedRemarks.length
+    });
+
+  } catch (error) {
+    console.error('Error in getLeadRemarks:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
