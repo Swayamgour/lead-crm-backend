@@ -14,8 +14,53 @@ import User from "../models/User.js";
 
 // ================= CREATE LEAD =================
 
+
+const addRemarkToLead = async ({ leadId, text, user }) => {
+  console.log("ADDING REMARK...");
+  if (!text || text.trim() === '') return null;
+
+  const lead = await Lead.findById(leadId);
+  if (!lead) throw new Error("Lead not found");
+
+  const newRemark = {
+    text: text.trim(),
+    createdBy: user._id,
+    createdByName: user.name,
+    createdAt: new Date(),
+    isEdited: false
+  };
+
+  lead.remarks.push(newRemark);
+  lead.updatedAt = new Date();
+
+  await lead.save();
+
+  const addedRemark = lead.remarks[lead.remarks.length - 1];
+
+  await Timeline.create({
+    leadId: lead._id,
+    assignedTo: lead.assignedTo,
+    type: "remark_added",
+    title: "Remark Added",
+    description: `${user.name} added a remark`,
+    createdBy: user._id,
+    createdByName: user.name,
+    metadata: {
+      remarkId: addedRemark._id,
+      text: addedRemark.text
+    }
+  });
+
+  return addedRemark;
+};
+
+
 export const createLead = async (req, res) => {
   try {
+    console.log("=== CREATE LEAD START ===");
+
+    console.log("BODY:", req.body);
+    console.log("USER:", req.user);
 
     const {
       name,
@@ -24,26 +69,36 @@ export const createLead = async (req, res) => {
       source,
       status,
       assignedTo,
-      remark,
+      remarks,
       followUpDate,
       expectedValue,
       tags
     } = req.body;
 
-    const user = await User.findById(req.user.id);
+    console.log("STEP 1: Finding user...");
+    const userId = req.user?._id || req.user?.id;
+    console.log("User ID:", userId);
 
-    const remarks = [];
-
-    // agar remark diya gaya hai
-    if (remark && remark.trim() !== "") {
-      remarks.push({
-        text: remark.trim(),
-        createdBy: req.user.id,
-        createdByName: user.name,
-        createdAt: new Date(),
-        isEdited: false
+    if (!userId) {
+      console.log("❌ USER ID MISSING");
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated"
       });
     }
+
+    const user = await User.findById(userId);
+    console.log("User found:", user);
+
+    if (!user) {
+      console.log("❌ USER NOT FOUND IN DB");
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    console.log("STEP 2: Creating lead...");
 
     const lead = await Lead.create({
       name,
@@ -52,63 +107,85 @@ export const createLead = async (req, res) => {
       source,
       status,
       assignedTo,
-      remarks: remarks,
       followUpDate,
       expectedValue,
       tags,
-      createdBy: req.user.id
+      createdBy: userId
     });
 
-    // timeline
+    console.log("✅ Lead created:", lead._id);
+
+    console.log("STEP 3: Creating timeline...");
     await Timeline.create({
       leadId: lead._id,
       assignedTo: lead.assignedTo,
       type: "lead_created",
       title: "Lead Created",
       description: `${lead.name} lead created`,
-      createdBy: req.user.id
+      createdBy: userId,
+      createdByName: user.name
     });
 
-    // agar remark hai to timeline bhi
-    if (remarks.length > 0) {
-      await Timeline.create({
-        leadId: lead._id,
-        assignedTo: lead.assignedTo,
-        type: "remark_added",
-        title: "Remark Added",
-        description: `${user.name} added remark while creating lead`,
-        createdBy: req.user.id,
-        createdByName: user.name,
-        metadata: {
-          text: remarks[0].text
-        }
-      });
+    console.log("✅ Timeline created");
+
+    console.log("STEP 4: Checking remark...");
+    console.log("Remark value:", remarks);
+
+    const plainRemark = remarks.replace(/<[^>]*>/g, "").trim();
+
+    console.log("Original Remark:", remarks);
+    console.log("Clean Remark:", plainRemark);
+
+    // ✅ SAFE REMARK CALL
+    if (plainRemark && plainRemark.trim() !== "") {
+      console.log("➡️ Calling addRemarkToLead...");
+
+      try {
+        const addedRemark = await addRemarkToLead({
+          leadId: lead._id,
+          text: plainRemark,
+          user
+        });
+
+        console.log("✅ Remark added:", addedRemark);
+      } catch (err) {
+        console.error("❌ Error in addRemarkToLead:", err);
+      }
+    } else {
+      console.log("⚠️ No remark provided");
     }
 
-    // followup
+    console.log("STEP 5: Checking followUp...");
     if (followUpDate) {
+      console.log("➡️ Creating followup...");
+
       await FollowUp.create({
         leadId: lead._id,
         assignedTo: lead.assignedTo,
         followUpDate,
         type: "call",
         status: "pending",
-        createdBy: req.user.id
+        createdBy: userId
       });
+
+      console.log("✅ Followup created");
     }
 
-    res.json({
+    console.log("=== CREATE LEAD SUCCESS ===");
+
+    return res.status(201).json({
       success: true,
+      message: "Lead created successfully",
       lead
     });
 
   } catch (error) {
+    console.error("🔥 ERROR IN CREATE LEAD:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message || "Something went wrong"
     });
-
   }
 };
 
@@ -690,6 +767,8 @@ export const changeLeadStatus = async (req, res) => {
 
 // Add a new remark
 // In your backend leadController.js
+
+
 
 export const addRemark = async (req, res) => {
   try {
