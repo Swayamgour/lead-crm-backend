@@ -18,15 +18,15 @@ export const getFollowUps = async (req, res) => {
 
         let filter = {};
 
-       
-        
+
+
         if (req.user.role !== "admin") {
             filter.assignedTo = req.user.id;
             console.log(req.user?.id)
         }
 
         const data = await FollowUp.find(filter)
-            .populate("leadId", "name phone")
+            .populate("leadId", "name phone status ")
             .populate("assignedTo", "name email");
 
         res.json(data);

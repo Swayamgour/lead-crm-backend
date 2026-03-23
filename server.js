@@ -14,6 +14,7 @@ import productRoutes from "./src/routes/productRoutes.js"
 import quotationRoutes from "./src/routes/quotationRoutes.js"
 import dashboardRoutes from "./src/routes/dashboardRoutes.js"
 import timelineRoutes from "./src/routes/timelineRoutes.js"
+import { seedAdmin } from "./src/utils/seedAdmin.js";
 // import { startIndiaMartCron } from "./src/cron/indiamartCron.js"
 
 import reportRoutes from "./src/routes/reportRoutes.js"
@@ -29,7 +30,11 @@ app.use(morgan("dev"))
 
 // startIndiaMartCron()
 
-connectDB()
+// connectDB()
+
+connectDB().then(() => {
+    seedAdmin(); // 👈 yaha call karo
+});
 
 app.use("/uploads", express.static("uploads"))
 
@@ -48,6 +53,6 @@ app.use("/api/products", productRoutes)
 app.use("/api/quotations", quotationRoutes)
 app.use("/api/dashboard", dashboardRoutes)
 
-app.listen(5000, () => {
+app.listen(5001, () => {
     console.log("Server running on port 5000")
 })

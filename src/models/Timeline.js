@@ -28,7 +28,8 @@ const timelineSchema = new mongoose.Schema({
       "remark_added",
       "remark_edited",   // ✅ yaha add karo
       "remark_deleted",
-      "followup_added"
+      "followup_added",
+      "lead_deleted"
     ],
     required: true
   },
