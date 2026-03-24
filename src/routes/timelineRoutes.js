@@ -2,10 +2,11 @@ import express from "express";
 
 import {
   getAllTimelines,
-  getLeadTimeline,
+  // getLeadTimeline,
   createTimeline,
   deleteTimeline,
-  getTimelineGrouped
+  getTimelineGrouped,
+  getLeadTimelineById
 } from "../controllers/timelineController.js";
 import { auth } from "../middleware/auth.js";
 
@@ -18,7 +19,7 @@ router.get("/Grouped", auth, getTimelineGrouped);
 
 /* GET LEAD TIMELINE */
 
-router.get("/lead/:leadId", getLeadTimeline);
+router.get("/lead/:leadId", getLeadTimelineById);
 
 /* CREATE */
 

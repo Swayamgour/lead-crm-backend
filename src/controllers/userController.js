@@ -79,9 +79,7 @@ export const getUsers = async (req, res) => {
 };
 
 export const createUser = async (req, res) => {
-
     try {
-
         const { name, phone, email, password } = req.body;
 
         const user = await User.create({
@@ -99,14 +97,30 @@ export const createUser = async (req, res) => {
 
     } catch (error) {
 
+        // 🔥 Duplicate error handle
+        if (error.code === 11000) {
+            const field = Object.keys(error.keyPattern)[0];
+
+            let message = "Duplicate field";
+
+            if (field === "email") {
+                message = "Email already exists";
+            } else if (field === "phone") {
+                message = "Phone number already exists";
+            }
+
+            return res.status(400).json({
+                success: false,
+                field,
+                message
+            });
+        }
+
         res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
-
-
 };
 
 

@@ -1,4 +1,5 @@
 import Timeline from "../models/Timeline.js";
+import Lead from "../models/Lead.js";
 import mongoose from "mongoose";
 
 /* ---------------------------
@@ -93,6 +94,36 @@ export const getTimelineGrouped = async (req, res) => {
 };
 
 
+
+export const getLeadTimelineById = async (req, res) => {
+    try {
+
+        const leadId = req.params.leadId;
+
+        // 🔥 Lead details
+        const lead = await Lead.findById(leadId)
+            .populate("assignedTo", "name email");
+
+        // 🔥 Timeline
+        const timelines = await Timeline.find({ leadId })
+            .populate("createdBy", "name")
+            .sort({ createdAt: -1 });
+
+        res.json({
+            success: true,
+            lead,
+            timelines
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+
 export const getAllTimelines = async (req, res) => {
 
     try {
@@ -120,31 +151,7 @@ export const getAllTimelines = async (req, res) => {
    GET TIMELINE BY LEAD
 ----------------------------*/
 
-export const getLeadTimeline = async (req, res) => {
 
-    try {
-
-        const timelines = await Timeline.find({
-            leadId: req.params.leadId
-        })
-            .populate("createdBy", "name")
-            .sort({ createdAt: -1 });
-
-        res.json({
-            success: true,
-            timelines
-        });
-
-    } catch (error) {
-
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-
-    }
-
-};
 
 
 /* ---------------------------

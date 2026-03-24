@@ -22,7 +22,8 @@ const schema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    required: true
+    required: true,
+    unique: true,
   },
   role: {
     type: String,
