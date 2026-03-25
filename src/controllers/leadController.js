@@ -417,6 +417,174 @@ export const getLeads = async (req, res) => {
   }
 };
 
+export const getLeadsPaginated = async (req, res) => {
+  try {
+
+    let filter = {};
+
+    // ================= ROLE BASED FILTER =================
+    if (req.user.role !== "admin") {
+      filter.assignedTo = req.user.id;
+    }
+
+    // ================= BASIC FILTERS =================
+    if (req.query.status && req.query.status !== "") {
+      filter.status = req.query.status;
+    }
+
+    if (req.query.priority && req.query.priority !== "") {
+      filter.priority = req.query.priority;
+    }
+
+    if (req.query.source && req.query.source !== "") {
+      filter.source = req.query.source;
+    }
+
+    if (req.query.pipelineStage && req.query.pipelineStage !== "") {
+      filter.pipelineStage = req.query.pipelineStage;
+    }
+
+    if (req.query.assignedTo && req.user.role === "admin") {
+      filter.assignedTo = req.query.assignedTo;
+    }
+
+    // ================= SEARCH FILTER =================
+    if (req.query.search?.trim()) {
+      const search = req.query.search.trim();
+
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { phone: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { companyName: { $regex: search, $options: "i" } },
+        { "remarks.text": { $regex: search, $options: "i" } }
+      ];
+    }
+
+    // ================= DATE FILTER =================
+    if (req.query.startDate && req.query.endDate) {
+      const start = new Date(req.query.startDate);
+      const end = new Date(req.query.endDate);
+
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+
+      filter.createdAt = {
+        $gte: start,
+        $lte: end
+      };
+    }
+
+    // ================= FOLLOWUP FILTER =================
+    if (req.query.followUpDate) {
+      if (req.query.followUpDate === "today") {
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+
+        const end = new Date();
+        end.setHours(23, 59, 59, 999);
+
+        filter.followUpDate = { $gte: start, $lte: end };
+
+      } else if (req.query.followUpDate === "upcoming") {
+        filter.followUpDate = { $gte: new Date() };
+
+      } else if (req.query.followUpDate === "overdue") {
+        filter.followUpDate = { $lt: new Date() };
+      }
+    }
+
+    // ================= PAGINATION =================
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // ================= SORTING =================
+    let sort = { createdAt: -1 };
+
+    if (req.query.sortBy) {
+      const [field, order] = req.query.sortBy.split(":");
+      sort = { [field]: order === "desc" ? -1 : 1 };
+    }
+
+    // ================= FETCH LEADS =================
+    const leads = await Lead.find(filter)
+      .populate("assignedTo", "name email")
+      .populate("createdBy", "name email")
+      .populate({
+        path: "remarks.createdBy",
+        select: "name email"
+      })
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const leadIds = leads.map(l => l._id);
+
+    // ================= EXTRA DATA =================
+    const remarksHistories = await LeadHistory.find({
+      leadId: { $in: leadIds },
+      action: { $in: ["remark_added", "remark_edited", "remark_deleted"] }
+    }).sort({ createdAt: -1 }).lean();
+
+    const followUps = await FollowUp.find({
+      leadId: { $in: leadIds },
+      status: "pending"
+    }).lean();
+
+    // ================= FINAL FORMAT =================
+    const leadsWithDetails = leads.map(lead => {
+
+      const sortedRemarks = lead.remarks
+        ? [...lead.remarks].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        : [];
+
+      const leadFollowUps = followUps.filter(
+        f => f.leadId.toString() === lead._id.toString()
+      );
+
+      return {
+        ...lead,
+        remarks: sortedRemarks,
+        remarksCount: sortedRemarks.length,
+        remarksHistory: remarksHistories.filter(
+          h => h.leadId.toString() === lead._id.toString()
+        ),
+        pendingFollowUps: leadFollowUps,
+        pendingFollowUpsCount: leadFollowUps.length,
+        lastRemark: sortedRemarks[0] || null
+      };
+    });
+
+    // ================= TOTAL COUNT =================
+    const total = await Lead.countDocuments(filter);
+    const totalPages = Math.ceil(total / limit);
+
+    // ================= RESPONSE =================
+    res.json({
+      success: true,
+      data: leadsWithDetails,
+      pagination: {
+        totalItems: total,
+        currentPage: page,
+        totalPages,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
+
+  } catch (error) {
+    console.error("Error in getLeadsPaginated:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 
 
 // Helper function to count occurrences in array

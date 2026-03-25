@@ -4,13 +4,18 @@ import Lead from "../models/Lead.js";
 
 export const getUsers = async (req, res) => {
     try {
+        // Get pagination parameters from query string
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        // Get total count for pagination info
+        const totalUsers = await User.countDocuments({ role: { $ne: "admin" } });
 
         const users = await User.aggregate([
-
             {
                 $match: { role: { $ne: "admin" } }
             },
-
             {
                 $lookup: {
                     from: "leads",
@@ -19,12 +24,9 @@ export const getUsers = async (req, res) => {
                     as: "leads"
                 }
             },
-
             {
                 $addFields: {
-
                     totalLeads: { $size: "$leads" },
-
                     wonLeads: {
                         $size: {
                             $filter: {
@@ -34,13 +36,10 @@ export const getUsers = async (req, res) => {
                             }
                         }
                     }
-
                 }
             },
-
             {
                 $addFields: {
-
                     accuracy: {
                         $cond: [
                             { $eq: ["$totalLeads", 0] },
@@ -53,28 +52,41 @@ export const getUsers = async (req, res) => {
                             }
                         ]
                     }
-
                 }
             },
-
             {
                 $project: {
                     password: 0,
                     leads: 0
                 }
+            },
+            {
+                $skip: skip
+            },
+            {
+                $limit: limit
             }
-
         ]);
 
-        res.json(users);
+        // Return paginated response
+        res.json({
+            success: true,
+            data: users,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalUsers / limit),
+                totalItems: totalUsers,
+                itemsPerPage: limit,
+                hasNextPage: page < Math.ceil(totalUsers / limit),
+                hasPrevPage: page > 1
+            }
+        });
 
     } catch (error) {
-
         res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
 };
 
