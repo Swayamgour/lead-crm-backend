@@ -57,10 +57,10 @@ const addRemarkToLead = async ({ leadId, text, user }) => {
 
 export const createLead = async (req, res) => {
   try {
-    console.log("=== CREATE LEAD START ===");
+    // console.log("=== CREATE LEAD START ===");
 
-    console.log("BODY:", req.body);
-    console.log("USER:", req.user);
+    // console.log("BODY:", req.body);
+    // console.log("USER:", req.user);
 
     const {
       name,
@@ -99,6 +99,23 @@ export const createLead = async (req, res) => {
     }
 
     console.log("STEP 2: Creating lead...");
+
+    console.log("STEP 2: Creating lead...");
+
+    // 🔍 DUPLICATE CHECK
+    const existingLead = await Lead.findOne({
+      $or: [
+        { phone: phone },
+        { email: email }
+      ]
+    });
+
+    if (existingLead) {
+      return res.status(400).json({
+        success: false,
+        message: "Lead with same phone or email already exists"
+      });
+    }
 
     const lead = await Lead.create({
       name,

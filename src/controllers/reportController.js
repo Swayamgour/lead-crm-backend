@@ -1,18 +1,16 @@
 import Lead from "../models/Lead.js";
 import User from "../models/User.js";
 
+// 🔥 COMMON FILTER FUNCTION
+const getRoleFilter = (user) => {
+    return user.role === "admin" ? {} : { assignedTo: user.id };
+};
 
 // ================= LEAD REPORT =================
-
 export const getLeadReport = async (req, res) => {
     try {
 
-        let filter = {};
-
-        // non-admin → only own leads
-        if (req.user.role !== "admin") {
-            filter.assignedTo = req.user.id;
-        }
+        const filter = getRoleFilter(req.user);
 
         const totalLeads = await Lead.countDocuments(filter);
 
@@ -44,27 +42,19 @@ export const getLeadReport = async (req, res) => {
         });
 
     } catch (error) {
-
         res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
 };
 
 
-
 // ================= SALES REPORT =================
-
 export const getSalesReport = async (req, res) => {
     try {
 
-        let filter = {};
-
-        if (req.user.role !== "admin") {
-            filter.assignedTo = req.user.id;
-        }
+        const filter = getRoleFilter(req.user);
 
         const totalLeads = await Lead.countDocuments(filter);
 
@@ -107,23 +97,22 @@ export const getSalesReport = async (req, res) => {
         });
 
     } catch (error) {
-
         res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
 };
 
 
-
 // ================= CONVERSION REPORT =================
-
 export const getConversionReport = async (req, res) => {
     try {
 
+        const filter = getRoleFilter(req.user);
+
         const result = await Lead.aggregate([
+            { $match: filter },
             {
                 $group: {
                     _id: null,
@@ -152,22 +141,69 @@ export const getConversionReport = async (req, res) => {
         });
 
     } catch (error) {
-
         res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
 };
 
 
-
 // ================= SALES PERFORMANCE =================
-
 export const getSalesPerformance = async (req, res) => {
     try {
 
+        // 🔥 अगर executive है → सिर्फ अपना data
+        if (req.user.role !== "admin") {
+
+            const userId = req.user.id;
+
+            const totalLeads = await Lead.countDocuments({
+                assignedTo: userId
+            });
+
+            const closedLeads = await Lead.countDocuments({
+                assignedTo: userId,
+                status: "Won"
+            });
+
+            const pendingLeads = await Lead.countDocuments({
+                assignedTo: userId,
+                status: { $ne: "Won" }
+            });
+
+            const revenue = await Lead.aggregate([
+                {
+                    $match: {
+                        assignedTo: userId,
+                        status: "Won"
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalRevenue: { $sum: "$expectedValue" }
+                    }
+                }
+            ]);
+
+            return res.json({
+                success: true,
+                report: [{
+                    executiveId: userId,
+                    name: req.user.name,
+                    totalLeads,
+                    closedLeads,
+                    pendingLeads,
+                    conversionRate: totalLeads
+                        ? ((closedLeads / totalLeads) * 100).toFixed(2) + "%"
+                        : "0%",
+                    revenue: revenue[0]?.totalRevenue || 0
+                }]
+            });
+        }
+
+        // 🔥 admin → sabka data
         const executives = await User.find({ role: "executive" });
 
         const report = [];
@@ -214,7 +250,6 @@ export const getSalesPerformance = async (req, res) => {
                     : "0%",
                 revenue: revenue[0]?.totalRevenue || 0
             });
-
         }
 
         res.json({
@@ -223,34 +258,31 @@ export const getSalesPerformance = async (req, res) => {
         });
 
     } catch (error) {
-
         res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
 };
 
 
-
 // ================= EXECUTIVE SALES REPORT =================
-
 export const executiveSalesReport = async (req, res) => {
     try {
 
+        const filter = getRoleFilter(req.user);
+
         const report = await Lead.aggregate([
+            { $match: filter },
             {
                 $group: {
                     _id: "$assignedTo",
                     totalLeads: { $sum: 1 },
-
                     converted: {
                         $sum: {
                             $cond: [{ $eq: ["$status", "Won"] }, 1, 0]
                         }
                     },
-
                     revenue: {
                         $sum: {
                             $cond: [
@@ -279,11 +311,9 @@ export const executiveSalesReport = async (req, res) => {
         });
 
     } catch (error) {
-
         res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
 };

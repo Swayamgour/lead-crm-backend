@@ -35,6 +35,7 @@ router.post("/", auth, createLead)
 router.post("/upload-excel", auth, upload.single("file"), uploadLeadsExcel);
 
 router.get("/", auth, getLeads)
+
 router.get("/paginated", auth, getLeadsPaginated)
 
 router.get("/:id", auth, getLeadById)
