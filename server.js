@@ -14,6 +14,9 @@ import productRoutes from "./src/routes/productRoutes.js"
 import quotationRoutes from "./src/routes/quotationRoutes.js"
 import dashboardRoutes from "./src/routes/dashboardRoutes.js"
 import timelineRoutes from "./src/routes/timelineRoutes.js"
+import indiamartRoutes from "./src/routes/indiamartRoutes.js"
+
+
 import { seedAdmin } from "./src/utils/seedAdmin.js";
 // import { startIndiaMartCron } from "./src/cron/indiamartCron.js"
 
@@ -44,6 +47,7 @@ app.use("/api/leads", leadRoutes)
 app.use("/api/followups", followUpRoutes)
 app.use("/api/TimeLine", timelineRoutes)
 app.use("/api/reports", reportRoutes)
+app.use("/api/indiamart", indiamartRoutes);
 
 
 

@@ -33,7 +33,7 @@ const leadSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    required: true
+    // required: true
   },
   email: String,
 
@@ -57,7 +57,7 @@ const leadSchema = new mongoose.Schema({
   assignedTo: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    // required: true
   },
   assignedBy: {
     type: mongoose.Schema.Types.ObjectId,
