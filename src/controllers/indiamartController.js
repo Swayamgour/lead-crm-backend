@@ -1,8 +1,10 @@
 import Lead from "../models/Lead.js";
+import Executive from "../models/Executive.js";
+import User from "../models/User.js";
 
 export const receiveLead = async (req, res) => {
     try {
-        console.log("IndiaMART Lead:", req.body);
+        // console.log("IndiaMART Lead:", req.body);
 
         const data = req.body?.RESPONSE || {};
 
@@ -28,6 +30,38 @@ export const receiveLead = async (req, res) => {
         const exists = await Lead.findOne({ uniqueId: leadData.uniqueId });
 
         if (!exists) {
+
+            // 🔥 1. Active executives nikaal
+            const executives = await User.find({ isActive: true  , role: "executive" }).sort({ createdAt: 1 });
+
+            // console.log("executives", executives)
+
+            if (executives.length > 0) {
+
+                // 🔥 2. Last assigned lead find kar
+                const lastLead = await Lead.findOne({ assignedTo: { $ne: null } })
+                    .sort({ createdAt: -1 });
+
+                let nextExecutive;
+
+                if (!lastLead) {
+                    // first lead
+                    nextExecutive = executives[0];
+                } else {
+                    const lastIndex = executives.findIndex(
+                        (e) => e._id.toString() === lastLead.assignedTo?.toString()
+                    );
+
+                    const nextIndex = (lastIndex + 1) % executives.length;
+                    nextExecutive = executives[nextIndex];
+                }
+
+                // ✅ assign kar
+                leadData.assignedTo = nextExecutive._id;
+
+                console.log(leadData.assignedTo, 'kjhgfd')
+            }
+
             await Lead.create(leadData);
         }
 
@@ -35,6 +69,6 @@ export const receiveLead = async (req, res) => {
 
     } catch (error) {
         console.error("ERROR:", error);
-        res.status(200).send("Handled"); // ❗ IndiaMART ke liye 200 hi bhejna
+        res.status(200).send("Handled");
     }
 };
