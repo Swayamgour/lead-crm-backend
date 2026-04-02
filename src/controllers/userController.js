@@ -1,5 +1,6 @@
 import User from "../models/User.js"
 import Lead from "../models/Lead.js";
+import bcrypt from "bcryptjs";
 
 
 export const getUsers = async (req, res) => {
@@ -135,6 +136,45 @@ export const createUser = async (req, res) => {
     }
 };
 
+export const updateUser = async (req, res) => {
+    console.log("BODY:", req.body);
+    try {
+        const user = await User.findById(req.params.id).select("+password");
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        const { password, ...rest } = req.body;
+
+        // 🧠 normal fields update
+        Object.assign(user, rest);
+
+        // 🔐 password update (IMPORTANT)
+        if (password && password.trim() !== "") {
+            user.password = password; // 👉 plain assign
+        }
+
+        await user.save(); // 🔥 middleware run hoga
+
+        const updatedUser = await User.findById(user._id).select("-password");
+
+        res.json({
+            success: true,
+            user: updatedUser
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 
 export const getUserById = async (req, res) => {
     try {
@@ -161,17 +201,11 @@ export const getUserById = async (req, res) => {
 }
 
 
-export const updateUser = async (req, res) => {
 
-    const user = await User.findByIdAndUpdate(
-        req.params.id,
-        req.body,
-        { new: true }
-    )
 
-    res.json(user)
 
-}
+
+
 
 export const deleteUser = async (req, res) => {
 

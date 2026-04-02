@@ -27,18 +27,24 @@ export const login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email.toLowerCase() }).select("+password");
+
+        console.log("User:", user);
 
         if (!user) {
             return res.status(401).json({ message: "Invalid credentials" });
         }
 
-        // ✅ NEW CONDITION: check isActive
         if (!user.isActive) {
-            return res.status(403).json({ message: "Your account is deactivated. Contact admin." });
+            return res.status(403).json({ message: "Account deactivated" });
         }
 
+        console.log("Entered:", password);
+        console.log("Stored:", user.password);
+
         const match = await user.comparePassword(password);
+
+        console.log("Match:", match);
 
         if (!match) {
             return res.status(401).json({ message: "Invalid credentials" });
@@ -57,6 +63,7 @@ export const login = async (req, res) => {
         });
 
     } catch (error) {
+        console.error(error);
         res.status(500).json({ message: error.message });
     }
 };

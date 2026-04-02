@@ -18,7 +18,8 @@ const schema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true
+    required: true,
+    select: false
   },
   phone: {
     type: String,
@@ -53,6 +54,8 @@ schema.pre("save", async function (next) {
   next()
 
 })
+
+
 
 schema.methods.comparePassword = function (p) {
 

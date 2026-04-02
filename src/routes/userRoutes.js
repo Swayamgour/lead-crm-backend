@@ -24,7 +24,8 @@ router.post(
     createUser
 )
 
-router.put("/:id", auth, permit("admin"), updateUser)
+// router.put("/:id", auth, permit("admin"), updateUser)
+router.put("/:id", auth, permit("admin"), upload.single("avatar"), updateUser);
 
 router.get("/:id", auth, permit("admin"), getUserById)
 
