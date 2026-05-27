@@ -15,6 +15,7 @@ import quotationRoutes from "./src/routes/quotationRoutes.js"
 import dashboardRoutes from "./src/routes/dashboardRoutes.js"
 import timelineRoutes from "./src/routes/timelineRoutes.js"
 import indiamartRoutes from "./src/routes/indiamartRoutes.js"
+import metaRoutes from "./src/routes/metaRoutes.js";
 
 
 import { seedAdmin } from "./src/utils/seedAdmin.js";
@@ -48,6 +49,7 @@ app.use("/api/followups", followUpRoutes)
 app.use("/api/TimeLine", timelineRoutes)
 app.use("/api/reports", reportRoutes)
 app.use("/api/indiamart", indiamartRoutes);
+app.use("/api/meta", metaRoutes);
 
 
 
