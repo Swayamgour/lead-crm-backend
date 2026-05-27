@@ -57,6 +57,18 @@ app.use("/api/products", productRoutes)
 app.use("/api/quotations", quotationRoutes)
 app.use("/api/dashboard", dashboardRoutes)
 
-app.listen(5001, () => {
-    console.log("Server running on port 5000")
+app.listen(5009, () => {
+    console.log("Server running on port 5009")
+})
+
+
+// Home Route
+app.get("/", (req, res) => {
+    res.send(`
+       
+            <h1>
+                ✅ your Dayroo Lead CRM Backend Running.
+            </h1>
+       
+    `)
 })

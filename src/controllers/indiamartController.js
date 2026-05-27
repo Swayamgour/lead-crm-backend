@@ -4,13 +4,13 @@ import User from "../models/User.js";
 
 export const receiveLead = async (req, res) => {
     try {
-        // console.log("IndiaMART Lead:", req.body);
+        console.log("IndiaMART Lead:", req.body);
 
         const data = req.body?.RESPONSE || {};
 
         const leadData = {
             name: data.SENDER_NAME || "",
-            mobile: data.SENDER_MOBILE || "",
+            phone: data.SENDER_MOBILE || "",
             email: data.SENDER_EMAIL || "",
             product: data.QUERY_PRODUCT_NAME || "",
             message: data.QUERY_MESSAGE || "",
