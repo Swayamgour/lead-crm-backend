@@ -12,7 +12,7 @@ import User from "../models/User.js";
 
 export const verifyWebhook = (req, res) => {
 
-    const VERIFY_TOKEN = "my_verify_token";
+    const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
 
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
