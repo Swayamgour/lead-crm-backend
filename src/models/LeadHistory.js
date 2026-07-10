@@ -11,7 +11,7 @@ const leadHistorySchema = new mongoose.Schema({
     },
     action: {
         type: String,
-        enum: ['created', 'updated', 'assigned', 'status_changed', 'followup_updated', 'remarks_updated', 'remark_added', 'remark_edited', 'remark_deleted'],
+        enum: ['created', 'updated', 'assigned', 'status_changed', 'followup_updated', 'remarks_updated', 'remark_added', 'remark_edited', 'remark_deleted' , 'followup_created', 'followup_deleted'],
         required: true
     },
     field: String,
