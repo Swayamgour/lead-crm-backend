@@ -69,7 +69,7 @@ app.get("/", (req, res) => {
     res.send(`
        
             <h1>
-                Dayroo Lead CRM Backend Running.
+                hello world .
             </h1>
        
     `)
